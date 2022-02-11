@@ -4,10 +4,10 @@ const corsOptions ={ origin:'*'}
 const app = express();
 const PORT = process.env.PORT || 5000 ;
 const fs = require('fs');
-var path = require('path');
 const csv = require('csv-parser');
 const { log } = require("console");
 app.use(cors(corsOptions))
+
 //------------------------- ส่ง api ตารางตามลิ้งที่ส่งมาเป็น http://localhost:5000/เครื่องครัว จะส่งข้อมูลเเค่ "เครื่องครัว" กลับ -----------//
 app.get('/data/*',(req,res)=>{
   var origin = req.params;  //ตัวรับ
@@ -60,10 +60,8 @@ app.get('/search/*',(req,res)=>{
       var arry = [] ;
       var breakdown = 0 ;
       for(let i = 0 ; i < results.length ; i++){            //ลูปส่งข้อมูลกลับ
-        console.log("i ="+i);
         if(origin[0] == results[i][`รหัสสินค้า`]){             // ถ้ารหัสตรงกัน
           for(let j = 0 ; j < results2.length ; j++){
-            console.log("j ="+j);
             if(results[i][`ชนิด`]==results2[j][`ID`]){
               var obj = {};
               obj[`รหัสสินค้า`] = results[i][`รหัสสินค้า`];
