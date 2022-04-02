@@ -1,90 +1,67 @@
 const express = require("express");
 const cors = require("cors");
-const corsOptions ={ origin:'*'}
+const res = require("express/lib/response");
 const app = express();
+var bodyParser = require('body-parser');
+var jsonParser = bodyParser.json();
 const PORT = process.env.PORT || 5000 ;
-const fs = require('fs');
-const csv = require('csv-parser');
-const { log } = require("console");
-app.use(cors(corsOptions))
+var jwt = require('jsonwebtoken');
+var secret = 'login-admin'
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
-//------------------------- ส่ง api ตารางตามลิ้งที่ส่งมาเป็น http://localhost:5000/เครื่องครัว จะส่งข้อมูลเเค่ "เครื่องครัว" กลับ -----------//
-app.get('/data/*',(req,res)=>{
-  var origin = req.params;  //ตัวรับ
-  const results = [];
-  const results2 = [];
-  fs.createReadStream(`./data/ไอดีของ.csv`)            //อ่านไฟล์ data สองที่ อันนี้ที่เเรก
-  .pipe(csv())
-  .on('data', (data) => results.push(data))
-  .on('end', () => {
-    fs.createReadStream(`./data/ชนิด-โซน.csv`)        //อันนี้ที่ที่สอง
-    .pipe(csv())
-    .on('data', (data) => results2.push(data))
-    .on('end', () => {
-      var arry = [] ;
-      for(let i = 0 ; i < results.length ; i++){            //ลูปส่งข้อมูลกลับ
-        for(let j = 0 ; j < results2.length ; j++){
-          if(results[i][`ชนิด`]==results2[j][`ID`]){
-            if(results2[j][`ชนิด`]==origin[0]){
-              var obj = {};
-              obj[`รหัสสินค้า`] = results[i][`รหัสสินค้า`];
-              obj[`ชนิด`] = results2[j][`ชนิด`];
-              obj[`โซน`] = results2[j][`โซน`];
-              obj[`ยี่ห้อ`] = results[i][`ยี่ห้อ`];
-              obj[`ประเภท`] = results[i][`ประเภท`];
-              obj[`ราคา`] = results[i][`ราคา`];
-              arry.push(obj);
-            }
-          }
-        }
-      }
-      res.send(arry);
-    });
-  }); 
-  }
-)
+const mysql = require('mysql2');
+app.use(cors())
 
-//------------------------- ส่ง api ตารางตามเลขที่ค้นหาเเล้วส่งมาเป็น เช่น http://localhost:5000/10001 จะส่งข้อมูลเเค่ "ข้อมูลของเลข" กลับ -----------//
-app.get('/search/*',(req,res)=>{
-  var origin = req.params; //ตัวรับ
-  const results = [];
-  const results2 = [];
-  fs.createReadStream(`./data/ไอดีของ.csv`)            //อ่านไฟล์ data สองที่ อันนี้ที่เเรก
-  .pipe(csv())
-  .on('data', (data) => results.push(data))
-  .on('end', () => {
-    fs.createReadStream(`./data/ชนิด-โซน.csv`)        //อันนี้ที่ที่สอง
-    .pipe(csv())
-    .on('data', (data) => results2.push(data))
-    .on('end', () => {
-      var arry = [] ;
-      var breakdown = 0 ;
-      for(let i = 0 ; i < results.length ; i++){            //ลูปส่งข้อมูลกลับ
-        if(origin[0] == results[i][`รหัสสินค้า`]){             // ถ้ารหัสตรงกัน
-          for(let j = 0 ; j < results2.length ; j++){
-            if(results[i][`ชนิด`]==results2[j][`ID`]){
-              var obj = {};
-              obj[`รหัสสินค้า`] = results[i][`รหัสสินค้า`];
-              obj[`ชนิด`] = results2[j][`ชนิด`];
-              obj[`โซน`] = results2[j][`โซน`];
-              obj[`ยี่ห้อ`] = results[i][`ยี่ห้อ`];
-              obj[`ประเภท`] = results[i][`ประเภท`];
-              obj[`ราคา`] = results[i][`ราคา`];
-              arry.push(obj);
-              breakdown++ ;                                //break ลูป เพราะเจอเเล้ว
-              break
+const connection = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    database: 'mydb'
+  });
+
+// เผื่อจะสร้างรหัสใหม่ 
+app.post('/register',jsonParser,function(req,res,next){
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        connection.execute(
+            'INSERT INTO user (id,password) VALUES(?,?)',
+            [req.body.id,hash],
+            function(err,results, fields) {
+            if(err){res.json({status:'error',message:err});return}
+            res.json({status :'ok'})
+    
             }
-          }
-        }
-        if(breakdown!=0){                                  //break ลูป เพราะเจอเเล้ว
-          break;
-        }
-      }
-      res.send(arry);
+        );
     });
-  }); 
-  
 })
 
+app.post('/login',jsonParser,function(req,res,next){
+    connection.execute(
+        'SELECT * FROM user WHERE id=?',
+        [req.body.id],
+        function(err,user, fields) {
+        if(err){res.json({status:'error',message:err});return}
+        if(user.length == 0){res.json({status:'error',message:"no user found"});return}
+        bcrypt.compare(req.body.password, user[0].password, function(err, islogin) {
+            if(islogin){
+                var token = jwt.sign({ id:user[0].id }, secret, { expiresIn: '1h' });
+                res.json({status :'ok',message:'success',token})
+            }else{
+                res.json({status :'error',message:'fail'})
+            }
+        });
+        }
+    );
+})
+
+app.post('/authen',jsonParser,function(req,res,next){
+    const token = req.body.token;
+    try{
+        var decoded = jwt.verify(token, secret);
+        res.json({status:'ok', decoded})
+        res.json({decoded});        
+    }catch(err){
+        res.json({status:'error',message: err.message})
+    }
+})
 
 app.listen(PORT,()=>console.log(`server is running on PORT ${PORT}`));
